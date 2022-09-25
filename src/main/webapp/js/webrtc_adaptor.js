@@ -2,6 +2,7 @@ import {PeerStats} from "./peer_stats.js"
 import {WebSocketAdaptor} from "./websocket_adaptor.js"
 import {MediaManager} from "./media_manager.js" 
 import {SoundMeter} from "./soundmeter.js" 
+import adapter from './external/adapter-latest'
 
 
 /**
@@ -863,6 +864,10 @@ export class WebRTCAdaptor
 			dataChannelMode = "play";
 		}
 
+		if (typeof this.callbackConfig === "function") {
+			conf = this.callbackConfig(idOfStream, conf);
+		}
+
 		this.idMapping[streamId] = idMapping;
 
 		this.initPeerConnection(streamId, dataChannelMode);
@@ -1229,7 +1234,7 @@ export class WebRTCAdaptor
 	}
 
 	/**
-	 * Called to start a periodic timer to get statistics periodically (5 seconds) for a specific stream.
+	 * Called to start a periodic timer to get statistics periodically (5 seconds now changed to 1 second) for a specific stream.
 	 *
      * 	 streamId: unique id for the stream 
 	 */
@@ -1241,7 +1246,7 @@ export class WebRTCAdaptor
 			{
 				this.getStats(streamId);
 
-			}, 5000);
+			}, 1000);
 		}
 	}
 
