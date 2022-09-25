@@ -419,12 +419,14 @@ export class MediaManager {
   async getUserMedia(mediaConstraints, catch_error = false) {
     if (catch_error == true) {
       try {
-        return navigator.mediaDevices.getUserMedia(mediaConstraints)
+        return await navigator.mediaDevices.getUserMedia(mediaConstraints)
       } catch (error) {
         if (error.name == 'NotFoundError') {
           this.getDevices()
         } else {
           this.callbackError(error.name, error.message)
+
+          throw error
         }
       }
     } else {
@@ -440,26 +442,27 @@ export class MediaManager {
    */
   async getDisplayMedia(mediaConstraints) {
     try {
-      return navigator.mediaDevices.getDisplayMedia(mediaConstraints)
+      return await navigator.mediaDevices.getDisplayMedia(mediaConstraints)
     } catch (error) {
       if (error.name === 'NotAllowedError') {
-        console.debug('Permission denied error')
-
         const fallback = this.callbackError('ScreenSharePermissionDenied')
-        if (fallback === false) return
 
-        // If error catched then redirect Default Stream Camera
-        if (this.localStream == null) {
-          const mediaConstraints = {
-            video: true,
-            audio: true,
+        if (fallback !== false) {
+          // If error catched then redirect Default Stream Camera
+          if (this.localStream == null) {
+            const mediaConstraints = {
+              video: true,
+              audio: true,
+            }
+
+            return this.openStream(mediaConstraints)
+          } else {
+            return this.switchVideoCameraCapture(streamId)
           }
-
-          return this.openStream(mediaConstraints)
-        } else {
-          return this.switchVideoCameraCapture(streamId)
         }
       }
+
+      throw error
     }
   }
 
@@ -644,11 +647,8 @@ export class MediaManager {
 
     audioDestination.stream.getAudioTracks().forEach((track) => {
       composedStream.addTrack(track)
-      console.log('audio destination add track')
     })
 
-    console.log('%c Created merged audio streams', 'color: #0000ff')
-    console.log(stream)
     return composedStream
   }
 
@@ -793,8 +793,6 @@ export class MediaManager {
    * and add the video track in `stream` parameter to the local stream
    */
   updateLocalVideoStream(stream, onEndedCallback, stopDesktop) {
-    console.log('UPDATE VIDEO STREAM')
-
     if (stopDesktop && this.desktopStream != null) {
       this.desktopStream.getVideoTracks()[0].stop()
     }
@@ -928,11 +926,11 @@ export class MediaManager {
       this.updateAudioTrack(stream, streamId, mediaConstraints, onEndedCallback)
     }
 
-      if (this.cameraEnabled) {
-        this.updateVideoTrack(stream, streamId, onEndedCallback, stopDesktop)
-      } else {
-        this.turnOffLocalCamera()
-      }
+    if (this.cameraEnabled) {
+      this.updateVideoTrack(stream, streamId, onEndedCallback, stopDesktop)
+    } else {
+      this.turnOffLocalCamera()
+    }
 
     return stream
   }
@@ -986,15 +984,10 @@ export class MediaManager {
   async updateAudioTrack(stream, streamId, onEndedCallback) {
     const audioTrackSender = this.getSender(streamId, 'audio')
     if (audioTrackSender) {
-      try {
-        await audioTrackSender.replaceTrack(stream.getAudioTracks()[0])
+      await audioTrackSender.replaceTrack(stream.getAudioTracks()[0])
 
-        return this.updateLocalAudioStream(stream, onEndedCallback)
-      } catch (error) {
-        console.error(error)
-      }
+      return this.updateLocalAudioStream(stream, onEndedCallback)
     } else {
-      console.log('No sender, update local', stream)
       return this.updateLocalAudioStream(stream, onEndedCallback)
     }
   }
@@ -1010,13 +1003,9 @@ export class MediaManager {
   async updateVideoTrack(stream, streamId, onEndedCallback, stopDesktop) {
     const videoTrackSender = this.getSender(streamId, 'video')
     if (videoTrackSender) {
-      try {
-        await videoTrackSender.replaceTrack(stream.getVideoTracks()[0])
+      await videoTrackSender.replaceTrack(stream.getVideoTracks()[0])
 
-        this.updateLocalVideoStream(stream, onEndedCallback, stopDesktop)
-      } catch (error) {
-        console.error(error)
-      }
+      this.updateLocalVideoStream(stream, onEndedCallback, stopDesktop)
     } else {
       this.updateLocalVideoStream(stream, onEndedCallback, stopDesktop)
     }

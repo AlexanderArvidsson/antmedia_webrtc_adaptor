@@ -278,11 +278,7 @@ export class WebRTCAdaptor {
     if (!this.onlyDataChannel) {
       // We need to ensure we have a local stream
       if (this.mediaManager.localStream == null) {
-        // console.log('NONE AVAILABLE')
-        // this.mediaManager.openStream(this.mediaConstraints)
-
-        const stream = await this.mediaManager.getMedia(this.mediaConstraints)
-        this.mediaManager.prepareStream(stream, streamId)
+        await this.mediaManager.openStream(this.mediaConstraints, streamId)
       }
 
       // Set command options if we have a local stream available
