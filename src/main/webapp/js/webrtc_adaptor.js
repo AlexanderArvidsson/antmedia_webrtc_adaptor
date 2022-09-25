@@ -210,7 +210,7 @@ export class WebRTCAdaptor {
       },
     })
 
-    //Initialize the local stream (if needed) and web socket connection
+    // Initialize the local stream (if needed) and web socket connection
     this.initialize()
   }
 
@@ -219,17 +219,21 @@ export class WebRTCAdaptor {
    * 	-check local stream unless it is in play mode
    * 	-start websocket connection
    */
-  initialize() {
+  async initialize() {
+    await this.ensureWebSocketConnection()
+
     if (
       !this.isPlayMode &&
       !this.onlyDataChannel &&
-      typeof this.mediaConstraints != 'undefined' &&
+      this.mediaConstraints != null &&
       this.mediaManager.localStream == null
     ) {
-      //we need local stream because it not a play mode
-      this.mediaManager.initLocalStream()
+      // we need local stream because it not a play mode
+      return await this.mediaManager.initialize()
+      // return true
     }
-    this.checkWebSocketConnection()
+
+    return false
   }
 
   /**
@@ -245,61 +249,54 @@ export class WebRTCAdaptor {
    * 				!!! for multitrack conference set this value with roomName
    *   metaData: a free text information for the stream to AMS. It is provided to Rest methods by the AMS
    */
-  publish(streamId, token, subscriberId, subscriberCode, streamName, mainTrack, metaData) {
-    //TODO: should refactor the repeated code
+  async publish(
+    streamId,
+    token,
+    subscriberId = '',
+    subscriberCode = '',
+    streamName = '',
+    mainTrack = '',
+    metaData,
+  ) {
+    // Base command for publishing
+    const jsCmd = {
+      command: 'publish',
+      streamId,
+      token,
+      subscriberId,
+      subscriberCode,
+      streamName,
+      mainTrack,
+      metaData,
+      video: false,
+      audio: false,
+    }
+
     this.publishStreamId = streamId
     this.mediaManager.publishStreamId = streamId
-    if (this.onlyDataChannel) {
-      var jsCmd = {
-        command: 'publish',
-        streamId: streamId,
-        token: token,
-        subscriberId: typeof subscriberId !== undefined ? subscriberId : '',
-        subscriberCode: typeof subscriberCode !== undefined ? subscriberCode : '',
-        streamName: typeof streamName !== undefined ? streamName : '',
-        mainTrack: typeof mainTrack !== undefined ? mainTrack : '',
-        video: false,
-        audio: false,
-        metaData: metaData,
+
+    if (!this.onlyDataChannel) {
+      // We need to ensure we have a local stream
+      if (this.mediaManager.localStream == null) {
+        // console.log('NONE AVAILABLE')
+        // this.mediaManager.openStream(this.mediaConstraints)
+
+        const stream = await this.mediaManager.getMedia(this.mediaConstraints)
+        this.mediaManager.prepareStream(stream, streamId)
+      }
+
+      // Set command options if we have a local stream available
+      if (this.mediaManager.localStream != null) {
+        jsCmd.video = this.mediaManager.localStream.getVideoTracks().length > 0 ? true : false
+        jsCmd.audio = this.mediaManager.localStream.getAudioTracks().length > 0 ? true : false
       }
     }
-    //If it started with playOnly mode and wants to publish now
-    else if (this.mediaManager.localStream == null) {
-      this.mediaManager.navigatorUserMedia(
-        this.mediaConstraints,
-        (stream) => {
-          this.mediaManager.gotStream(stream)
-          var jsCmd = {
-            command: 'publish',
-            streamId: streamId,
-            token: token,
-            subscriberId: typeof subscriberId !== undefined ? subscriberId : '',
-            subscriberCode: typeof subscriberCode !== undefined ? subscriberCode : '',
-            streamName: typeof streamName !== undefined ? streamName : '',
-            mainTrack: typeof mainTrack !== undefined ? mainTrack : '',
-            video: this.mediaManager.localStream.getVideoTracks().length > 0 ? true : false,
-            audio: this.mediaManager.localStream.getAudioTracks().length > 0 ? true : false,
-            metaData: metaData,
-          }
-          this.webSocketAdaptor.send(JSON.stringify(jsCmd))
-        },
-        false,
-      )
-    } else {
-      var jsCmd = {
-        command: 'publish',
-        streamId: streamId,
-        token: token,
-        subscriberId: typeof subscriberId !== undefined ? subscriberId : '',
-        subscriberCode: typeof subscriberCode !== undefined ? subscriberCode : '',
-        streamName: typeof streamName !== undefined ? streamName : '',
-        mainTrack: typeof mainTrack !== undefined ? mainTrack : '',
-        video: this.mediaManager.localStream.getVideoTracks().length > 0 ? true : false,
-        audio: this.mediaManager.localStream.getAudioTracks().length > 0 ? true : false,
-        metaData: metaData,
-      }
-    }
+
     this.webSocketAdaptor.send(JSON.stringify(jsCmd))
+
+    if (this.onlyDataChannel) return
+
+    return this.mediaManager.localStream
   }
 
   /**
@@ -314,7 +311,7 @@ export class WebRTCAdaptor {
   joinRoom(roomName, streamId, mode) {
     this.roomName = roomName
 
-    var jsCmd = {
+    const jsCmd = {
       command: 'joinRoom',
       room: roomName,
       streamId: streamId,
@@ -335,16 +332,17 @@ export class WebRTCAdaptor {
    * 	 subscriberCode: required if TOTP enabled. Check https://github.com/ant-media/Ant-Media-Server/wiki/Time-based-One-Time-Password-(TOTP)
    *   metaData: a free text information for the stream to AMS. It is provided to Rest methods by the AMS
    */
-  play(streamId, token, roomId, enableTracks, subscriberId, subscriberCode, metaData) {
+  play(streamId, token, roomId, enableTracks, subscriberId = '', subscriberCode = '', metaData) {
     this.playStreamId.push(streamId)
-    var jsCmd = {
+
+    const jsCmd = {
       command: 'play',
-      streamId: streamId,
-      token: token,
+      streamId,
+      token,
       room: roomId,
       trackList: enableTracks,
-      subscriberId: typeof subscriberId !== undefined ? subscriberId : '',
-      subscriberCode: typeof subscriberCode !== undefined ? subscriberCode : '',
+      subscriberId,
+      subscriberCode,
       viewerInfo: metaData,
     }
 
@@ -357,14 +355,17 @@ export class WebRTCAdaptor {
    * 	 streamId: unique id for the stream that you want to stop publishing or playing
    */
   stop(streamId) {
+    this.closeStream()
     this.closePeerConnection(streamId)
 
-    var jsCmd = {
+    const jsCmd = {
       command: 'stop',
-      streamId: streamId,
+      streamId,
     }
 
     this.webSocketAdaptor.send(JSON.stringify(jsCmd))
+
+    this.publishStreamId = null
   }
 
   /**
@@ -373,7 +374,7 @@ export class WebRTCAdaptor {
    * 	 streamId: unique id for the peer-to-peer session
    */
   join(streamId) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'join',
       streamId: streamId,
       multiPeer: this.isMultiPeer && this.multiPeerStreamId == null,
@@ -390,7 +391,7 @@ export class WebRTCAdaptor {
    */
   leaveFromRoom(roomName) {
     this.roomName = roomName
-    var jsCmd = {
+    const jsCmd = {
       command: 'leaveFromRoom',
       room: roomName,
     }
@@ -405,7 +406,7 @@ export class WebRTCAdaptor {
    * 	 streamId: unique id for the peer-to-peer session
    */
   leave(streamId) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'leave',
       streamId:
         this.isMultiPeer && this.multiPeerStreamId != null ? this.multiPeerStreamId : streamId,
@@ -422,7 +423,7 @@ export class WebRTCAdaptor {
    * 	 streamId: unique id for the stream that you want to get info about
    */
   getStreamInfo(streamId) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'getStreamInfo',
       streamId: streamId,
     }
@@ -436,7 +437,7 @@ export class WebRTCAdaptor {
    *   metaData: new free text information for the stream
    */
   upateStreamMetaData(streamId, metaData) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'updateStreamMetaData',
       streamId: streamId,
       metaData: metaData,
@@ -452,7 +453,7 @@ export class WebRTCAdaptor {
    * 	 streamId: unique id for the stream that is streamed by this @WebRTCAdaptor
    */
   getRoomInfo(roomName, streamId) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'getRoomInfo',
       streamId: streamId,
       room: roomName,
@@ -468,7 +469,7 @@ export class WebRTCAdaptor {
    * 	 enabled: true or false
    */
   enableTrack(mainTrackId, trackId, enabled) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'enableTrack',
       streamId: mainTrackId,
       trackId: trackId,
@@ -486,7 +487,8 @@ export class WebRTCAdaptor {
    */
   getTracks(streamId, token) {
     this.playStreamId.push(streamId)
-    var jsCmd = {
+
+    const jsCmd = {
       command: 'getTrackList',
       streamId: streamId,
       token: token,
@@ -545,7 +547,7 @@ export class WebRTCAdaptor {
       }
 
       if (protocolSupported) {
-        var jsCmd = {
+        const jsCmd = {
           command: 'takeCandidate',
           streamId: streamId,
           label: event.candidate.sdpMLineIndex,
@@ -557,6 +559,7 @@ export class WebRTCAdaptor {
           console.log('sending ice candiate for stream Id ' + streamId)
           console.log(JSON.stringify(event.candidate))
         }
+
         this.webSocketAdaptor.send(JSON.stringify(jsCmd))
       } else {
         console.log(
@@ -820,7 +823,7 @@ export class WebRTCAdaptor {
       .then((responose) => {
         console.debug('Set local description successfully for stream Id ' + streamId)
 
-        var jsCmd = {
+        const jsCmd = {
           command: 'takeConfiguration',
           streamId: streamId,
           type: configuration.type,
@@ -1013,22 +1016,22 @@ export class WebRTCAdaptor {
   }
 
   /**
-   * Called by WebSocketAdaptor when start message is received //TODO: may be changed. this logic shouldn't be in WebSocketAdaptor
+   * Called by WebSocketAdaptor when start message is received
+   * TODO: may be changed. this logic shouldn't be in WebSocketAdaptor
    * 	 idOfStream: unique id for the stream
    */
-  startPublishing(idOfStream) {
-    var streamId = idOfStream
-
+  async startPublishing(streamId) {
     this.initPeerConnection(streamId, 'publish')
 
-    this.remotePeerConnection[streamId]
-      .createOffer(this.sdp_constraints)
-      .then((configuration) => {
-        this.gotDescription(configuration, streamId)
-      })
-      .catch((error) => {
-        console.error('create offer error for stream id: ' + streamId + ' error: ' + error)
-      })
+    try {
+      const configuration = await this.remotePeerConnection[streamId].createOffer(
+        this.sdp_constraints,
+      )
+
+      this.gotDescription(configuration, streamId)
+    } catch (error) {
+      console.error('create offer error for stream id: ' + streamId + ' error: ' + error)
+    }
   }
 
   /**
@@ -1040,12 +1043,13 @@ export class WebRTCAdaptor {
    *   enabled: is the enable/disable video track. If it's true, server sends video track. If it's false, server does not send video
    */
   toggleVideo(streamId, trackId, enabled) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'toggleVideo',
       streamId: streamId,
       trackId: trackId,
       enabled: enabled,
     }
+
     this.webSocketAdaptor.send(JSON.stringify(jsCmd))
   }
 
@@ -1059,12 +1063,13 @@ export class WebRTCAdaptor {
    *
    */
   toggleAudio(streamId, trackId, enabled) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'toggleAudio',
       streamId: streamId,
       trackId: trackId,
       enabled: enabled,
     }
+
     this.webSocketAdaptor.send(JSON.stringify(jsCmd))
   }
 
@@ -1073,167 +1078,165 @@ export class WebRTCAdaptor {
    *
    * 	 streamId: unique id for the stream
    */
-  getStats(streamId) {
-    console.log('peerstatsgetstats = ' + this.remotePeerConnectionStats[streamId])
+  async getStats(streamId) {
+    const stats = await this.remotePeerConnection[streamId].getStats(null)
 
-    this.remotePeerConnection[streamId].getStats(null).then((stats) => {
-      var bytesReceived = -1
-      var videoPacketsLost = -1
-      var audioPacketsLost = -1
-      var fractionLost = -1
-      var currentTime = -1
-      var bytesSent = -1
-      var audioLevel = -1
-      var qlr = ''
-      var framesEncoded = -1
-      var width = -1
-      var height = -1
-      var fps = -1
-      var frameWidth = -1
-      var frameHeight = -1
-      var videoRoundTripTime = -1
-      var videoJitter = -1
+    let bytesReceived = -1
+    let videoPacketsLost = -1
+    let audioPacketsLost = -1
+    let fractionLost = -1
+    let currentTime = -1
+    let bytesSent = -1
+    let audioLevel = -1
+    let qlr = ''
+    let framesEncoded = -1
+    let width = -1
+    let height = -1
+    let fps = -1
+    let frameWidth = -1
+    let frameHeight = -1
+    let videoRoundTripTime = -1
+    let videoJitter = -1
 
-      var audioRoundTripTime = -1
-      var audioJitter = -1
+    let audioRoundTripTime = -1
+    let audioJitter = -1
 
-      var framesDecoded = -1
-      var framesDropped = -1
-      var framesReceived = -1
+    let framesDecoded = -1
+    let framesDropped = -1
+    let framesReceived = -1
 
-      var audioJitterAverageDelay = -1
-      var videoJitterAverageDelay = -1
+    let audioJitterAverageDelay = -1
+    let videoJitterAverageDelay = -1
 
-      stats.forEach((value) => {
-        //console.log(value);
+    stats.forEach((value) => {
+      //console.log(value);
 
-        if (value.type == 'inbound-rtp' && typeof value.kind != 'undefined') {
-          bytesReceived += value.bytesReceived
-          if (value.kind == 'audio') {
-            audioPacketsLost = value.packetsLost
-          } else if (value.kind == 'video') {
-            videoPacketsLost = value.packetsLost
-          }
+      if (value.type == 'inbound-rtp' && typeof value.kind != 'undefined') {
+        bytesReceived += value.bytesReceived
+        if (value.kind == 'audio') {
+          audioPacketsLost = value.packetsLost
+        } else if (value.kind == 'video') {
+          videoPacketsLost = value.packetsLost
+        }
 
-          fractionLost += value.fractionLost
-          currentTime = value.timestamp
-        } else if (value.type == 'outbound-rtp') {
-          //TODO: SPLIT AUDIO AND VIDEO BITRATES
-          bytesSent += value.bytesSent
-          currentTime = value.timestamp
-          qlr = value.qualityLimitationReason
-          if (value.framesEncoded != null) {
-            //audio tracks are undefined here
-            framesEncoded += value.framesEncoded
-          }
-        } else if (
-          value.type == 'track' &&
-          typeof value.kind != 'undefined' &&
-          value.kind == 'audio'
+        fractionLost += value.fractionLost
+        currentTime = value.timestamp
+      } else if (value.type == 'outbound-rtp') {
+        //TODO: SPLIT AUDIO AND VIDEO BITRATES
+        bytesSent += value.bytesSent
+        currentTime = value.timestamp
+        qlr = value.qualityLimitationReason
+        if (value.framesEncoded != null) {
+          //audio tracks are undefined here
+          framesEncoded += value.framesEncoded
+        }
+      } else if (
+        value.type == 'track' &&
+        typeof value.kind != 'undefined' &&
+        value.kind == 'audio'
+      ) {
+        if (typeof value.audioLevel != 'undefined') {
+          audioLevel = value.audioLevel
+        }
+
+        if (
+          typeof value.jitterBufferDelay != 'undefined' &&
+          typeof value.jitterBufferEmittedCount != 'undefined'
         ) {
-          if (typeof value.audioLevel != 'undefined') {
-            audioLevel = value.audioLevel
-          }
+          audioJitterAverageDelay = value.jitterBufferDelay / value.jitterBufferEmittedCount
+        }
+      } else if (
+        value.type == 'track' &&
+        typeof value.kind != 'undefined' &&
+        value.kind == 'video'
+      ) {
+        if (typeof value.frameWidth != 'undefined') {
+          frameWidth = value.frameWidth
+        }
+        if (typeof value.frameHeight != 'undefined') {
+          frameHeight = value.frameHeight
+        }
 
-          if (
-            typeof value.jitterBufferDelay != 'undefined' &&
-            typeof value.jitterBufferEmittedCount != 'undefined'
-          ) {
-            audioJitterAverageDelay = value.jitterBufferDelay / value.jitterBufferEmittedCount
-          }
-        } else if (
-          value.type == 'track' &&
-          typeof value.kind != 'undefined' &&
-          value.kind == 'video'
+        if (typeof value.framesDecoded != 'undefined') {
+          framesDecoded = value.framesDecoded
+        }
+
+        if (typeof value.framesDropped != 'undefined') {
+          framesDropped = value.framesDropped
+        }
+
+        if (typeof value.framesReceived != 'undefined') {
+          framesReceived = value.framesReceived
+        }
+
+        if (
+          typeof value.jitterBufferDelay != 'undefined' &&
+          typeof value.jitterBufferEmittedCount != 'undefined'
         ) {
-          if (typeof value.frameWidth != 'undefined') {
-            frameWidth = value.frameWidth
-          }
-          if (typeof value.frameHeight != 'undefined') {
-            frameHeight = value.frameHeight
-          }
-
-          if (typeof value.framesDecoded != 'undefined') {
-            framesDecoded = value.framesDecoded
-          }
-
-          if (typeof value.framesDropped != 'undefined') {
-            framesDropped = value.framesDropped
-          }
-
-          if (typeof value.framesReceived != 'undefined') {
-            framesReceived = value.framesReceived
-          }
-
-          if (
-            typeof value.jitterBufferDelay != 'undefined' &&
-            typeof value.jitterBufferEmittedCount != 'undefined'
-          ) {
-            videoJitterAverageDelay = value.jitterBufferDelay / value.jitterBufferEmittedCount
-          }
-        } else if (value.type == 'remote-inbound-rtp' && typeof value.kind != 'undefined') {
-          if (typeof value.packetsLost != 'undefined') {
-            if (value.kind == 'video') {
-              //this is the packetsLost for publishing
-              videoPacketsLost = value.packetsLost
-            } else if (value.kind == 'audio') {
-              //this is the packetsLost for publishing
-              audioPacketsLost = value.packetsLost
-            }
-          }
-
-          if (typeof value.roundTripTime != 'undefined') {
-            if (value.kind == 'video') {
-              videoRoundTripTime = value.roundTripTime
-            } else if (value.kind == 'audio') {
-              audioRoundTripTime = value.roundTripTime
-            }
-          }
-
-          if (typeof value.jitter != 'undefined') {
-            if (value.kind == 'video') {
-              videoJitter = value.jitter
-            } else if (value.kind == 'audio') {
-              audioJitter = value.jitter
-            }
-          }
-        } else if (value.type == 'media-source') {
+          videoJitterAverageDelay = value.jitterBufferDelay / value.jitterBufferEmittedCount
+        }
+      } else if (value.type == 'remote-inbound-rtp' && typeof value.kind != 'undefined') {
+        if (typeof value.packetsLost != 'undefined') {
           if (value.kind == 'video') {
-            //returns video source dimensions, not necessarily dimensions being encoded by browser
-            width = value.width
-            height = value.height
-            fps = value.framesPerSecond
+            //this is the packetsLost for publishing
+            videoPacketsLost = value.packetsLost
+          } else if (value.kind == 'audio') {
+            //this is the packetsLost for publishing
+            audioPacketsLost = value.packetsLost
           }
         }
-      })
 
-      this.remotePeerConnectionStats[streamId].totalBytesReceived = bytesReceived
-      this.remotePeerConnectionStats[streamId].videoPacketsLost = videoPacketsLost
-      this.remotePeerConnectionStats[streamId].audioPacketsLost = audioPacketsLost
-      this.remotePeerConnectionStats[streamId].fractionLost = fractionLost
-      this.remotePeerConnectionStats[streamId].currentTime = currentTime
-      this.remotePeerConnectionStats[streamId].totalBytesSent = bytesSent
-      this.remotePeerConnectionStats[streamId].audioLevel = audioLevel
-      this.remotePeerConnectionStats[streamId].qualityLimitationReason = qlr
-      this.remotePeerConnectionStats[streamId].totalFramesEncoded = framesEncoded
-      this.remotePeerConnectionStats[streamId].resWidth = width
-      this.remotePeerConnectionStats[streamId].resHeight = height
-      this.remotePeerConnectionStats[streamId].srcFps = fps
-      this.remotePeerConnectionStats[streamId].frameWidth = frameWidth
-      this.remotePeerConnectionStats[streamId].frameHeight = frameHeight
-      this.remotePeerConnectionStats[streamId].videoRoundTripTime = videoRoundTripTime
-      this.remotePeerConnectionStats[streamId].videoJitter = videoJitter
-      this.remotePeerConnectionStats[streamId].audioRoundTripTime = audioRoundTripTime
-      this.remotePeerConnectionStats[streamId].audioJitter = audioJitter
-      this.remotePeerConnectionStats[streamId].framesDecoded = framesDecoded
-      this.remotePeerConnectionStats[streamId].framesDropped = framesDropped
-      this.remotePeerConnectionStats[streamId].framesReceived = framesReceived
+        if (typeof value.roundTripTime != 'undefined') {
+          if (value.kind == 'video') {
+            videoRoundTripTime = value.roundTripTime
+          } else if (value.kind == 'audio') {
+            audioRoundTripTime = value.roundTripTime
+          }
+        }
 
-      this.remotePeerConnectionStats[streamId].videoJitterAverageDelay = videoJitterAverageDelay
-      this.remotePeerConnectionStats[streamId].audioJitterAverageDelay = audioJitterAverageDelay
-
-      this.callback('updated_stats', this.remotePeerConnectionStats[streamId])
+        if (typeof value.jitter != 'undefined') {
+          if (value.kind == 'video') {
+            videoJitter = value.jitter
+          } else if (value.kind == 'audio') {
+            audioJitter = value.jitter
+          }
+        }
+      } else if (value.type == 'media-source') {
+        if (value.kind == 'video') {
+          //returns video source dimensions, not necessarily dimensions being encoded by browser
+          width = value.width
+          height = value.height
+          fps = value.framesPerSecond
+        }
+      }
     })
+
+    return {
+      totalBytesReceived: bytesReceived,
+      videoPacketsLost: videoPacketsLost,
+      audioPacketsLost: audioPacketsLost,
+      fractionLost: fractionLost,
+      currentTime: currentTime,
+      totalBytesSent: bytesSent,
+      audioLevel: audioLevel,
+      qualityLimitationReason: qlr,
+      totalFramesEncoded: framesEncoded,
+      resWidth: width,
+      resHeight: height,
+      srcFps: fps,
+      frameWidth: frameWidth,
+      frameHeight: frameHeight,
+      videoRoundTripTime: videoRoundTripTime,
+      videoJitter: videoJitter,
+      audioRoundTripTime: audioRoundTripTime,
+      audioJitter: audioJitter,
+      framesDecoded: framesDecoded,
+      framesDropped: framesDropped,
+      framesReceived: framesReceived,
+
+      videoJitterAverageDelay: videoJitterAverageDelay,
+      audioJitterAverageDelay: audioJitterAverageDelay,
+    }
   }
 
   /**
@@ -1244,8 +1247,12 @@ export class WebRTCAdaptor {
   enableStats(streamId) {
     if (this.remotePeerConnectionStats[streamId] == null) {
       this.remotePeerConnectionStats[streamId] = new PeerStats(streamId)
-      this.remotePeerConnectionStats[streamId].timerId = setInterval(() => {
-        this.getStats(streamId)
+      this.remotePeerConnectionStats[streamId].timerId = setInterval(async () => {
+        const stats = await this.getStats(streamId)
+
+        Object.assign(this.remotePeerConnectionStats[streamId], stats)
+
+        this.callback('updated_stats', this.remotePeerConnectionStats[streamId])
       }, 1000)
     }
   }
@@ -1256,10 +1263,7 @@ export class WebRTCAdaptor {
    * 	 streamId: unique id for the stream
    */
   disableStats(streamId) {
-    if (
-      this.remotePeerConnectionStats[streamId] != null ||
-      typeof this.remotePeerConnectionStats[streamId] != 'undefined'
-    ) {
+    if (this.remotePeerConnectionStats[streamId] != null) {
       clearInterval(this.remotePeerConnectionStats[streamId].timerId)
     }
   }
@@ -1267,20 +1271,30 @@ export class WebRTCAdaptor {
   /**
    * Called to check and start Web Socket connection if it is not started
    */
-  checkWebSocketConnection() {
-    if (
-      this.webSocketAdaptor == null ||
-      (this.webSocketAdaptor.isConnected() == false &&
-        this.webSocketAdaptor.isConnecting() == false)
-    ) {
-      this.webSocketAdaptor = new WebSocketAdaptor({
-        websocket_url: this.websocket_url,
-        webrtcadaptor: this,
-        callback: this.callback,
-        callbackError: this.callbackError,
-        debug: this.debug,
-      })
-    }
+  ensureWebSocketConnection() {
+    return new Promise((resolve) => {
+      if (
+        this.webSocketAdaptor == null ||
+        (this.webSocketAdaptor.isConnected() == false &&
+          this.webSocketAdaptor.isConnecting() == false)
+      ) {
+        this.webSocketAdaptor = new WebSocketAdaptor({
+          websocket_url: this.websocket_url,
+          webrtcadaptor: this,
+          callback: (definition, ...args) => {
+            if (definition === 'initialized') resolve()
+
+            this.callback(definition, ...args)
+          },
+          callbackError: this.callbackError,
+          debug: this.debug,
+        })
+
+        return
+      }
+
+      resolve()
+    })
   }
 
   /**
@@ -1289,7 +1303,10 @@ export class WebRTCAdaptor {
    * Because all streams are closed on server side as well when websocket connection is closed.
    */
   closeWebSocket() {
-    for (var key in this.remotePeerConnection) {
+    // No adaptor exists
+    if (!this.webSocketAdaptor) return
+
+    for (const key in this.remotePeerConnection) {
       this.remotePeerConnection[key].close()
     }
     //free the remote peer connection by initializing again
@@ -1301,7 +1318,7 @@ export class WebRTCAdaptor {
    * Called to send a text message to other peer in the peer-to-peer sessionnnection is closed.
    */
   peerMessage(streamId, definition, data) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'peerMessageCommand',
       streamId: streamId,
       definition: definition,
@@ -1318,11 +1335,12 @@ export class WebRTCAdaptor {
    *   resolution: default is auto. You can specify any height value from the ABR list.
    */
   forceStreamQuality(streamId, resolution) {
-    var jsCmd = {
+    const jsCmd = {
       command: 'forceStreamQuality',
       streamId: streamId,
       streamHeight: resolution,
     }
+
     this.webSocketAdaptor.send(JSON.stringify(jsCmd))
   }
 
@@ -1414,13 +1432,11 @@ export class WebRTCAdaptor {
    * @returns
    */
   getSender(streamId, type) {
-    var sender = null
     if (this.remotePeerConnection[streamId] != null) {
-      sender = this.remotePeerConnection[streamId].getSenders().find(function (s) {
-        return s.track.kind == type
-      })
+      return this.remotePeerConnection[streamId].getSenders().find((s) => s.track.kind == type)
     }
-    return sender
+
+    return null
   }
 
   /**
@@ -1514,10 +1530,10 @@ export class WebRTCAdaptor {
     this.mediaManager.unmuteLocalMic()
   }
   switchDesktopCapture(streamId) {
-    this.mediaManager.switchDesktopCapture(streamId)
+    return this.mediaManager.switchDesktopCapture(streamId)
   }
   switchVideoCameraCapture(streamId, deviceId) {
-    this.mediaManager.switchVideoCameraCapture(streamId, deviceId)
+    return this.mediaManager.switchVideoCameraCapture(streamId, deviceId)
   }
 
   /**
@@ -1534,10 +1550,10 @@ export class WebRTCAdaptor {
   }
 
   switchDesktopCaptureWithCamera(streamId) {
-    this.mediaManager.switchDesktopCaptureWithCamera(streamId)
+    return this.mediaManager.switchDesktopCaptureWithCamera(streamId)
   }
   switchAudioInputSource(streamId, deviceId) {
-    this.mediaManager.switchAudioInputSource(streamId, deviceId)
+    return this.mediaManager.switchAudioInputSource(streamId, deviceId)
   }
   setVolumeLevel(volumeLevel) {
     this.mediaManager.setVolumeLevel(volumeLevel)
