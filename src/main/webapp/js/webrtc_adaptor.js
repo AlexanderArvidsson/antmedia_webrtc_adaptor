@@ -1075,6 +1075,10 @@ export class WebRTCAdaptor {
    * 	 streamId: unique id for the stream
    */
   async getStats(streamId) {
+    if (!this.remotePeerConnection[streamId]) {
+      throw new Error('No remote peer connection for streamId: ' + streamId)
+    }
+
     const stats = await this.remotePeerConnection[streamId].getStats(null)
 
     let bytesReceived = -1
@@ -1241,10 +1245,15 @@ export class WebRTCAdaptor {
    * 	 streamId: unique id for the stream
    */
   enableStats(streamId) {
+    if (!this.remotePeerConnection[streamId]) {
+      throw new Error('No remote peer connection for streamId: ' + streamId)
+    }
+
     if (this.remotePeerConnectionStats[streamId] == null) {
       this.remotePeerConnectionStats[streamId] = new PeerStats(streamId)
       this.remotePeerConnectionStats[streamId].timerId = setInterval(async () => {
         const stats = await this.getStats(streamId)
+        if (!stats) return
 
         Object.assign(this.remotePeerConnectionStats[streamId], stats)
 

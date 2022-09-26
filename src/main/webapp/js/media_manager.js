@@ -491,6 +491,7 @@ export class MediaManager {
       const stream = await this.getMedia(mediaConstraints)
       return this.prepareStream(stream, streamId)
     } else {
+      this.localStream = null
       console.error('MediaConstraint video is not defined')
       this.callbackError('media_constraint_video_not_defined')
     }
