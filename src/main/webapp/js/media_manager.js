@@ -62,6 +62,12 @@ export class MediaManager {
      */
     this.publishMode = 'camera' //screen, screen+camera
 
+    /*
+     * audio mode is determined by the user
+     * It may be system, microphone, system+microphone
+     */
+    this.audioMode = 'system+microphone' //system, microphone, system+microphone
+
     /**
      * The values of the above fields are provided as user parameters by the constructor.
      * TODO: Also some other hidden parameters may be passed here
@@ -354,7 +360,7 @@ export class MediaManager {
    * 	2. Open audio track again if audio constaint isn't false
    * 	3. Make audio track Gain Node to be able to volume adjustable
    *  4. If screen is shared and system audio is available then the system audio and
-   *     opened audio track are mixed
+   *     opened audio track are mixed, depending on the audio mode
    *
    * @param {*} mediaConstraints
    * @param {*} audioConstraint
@@ -393,9 +399,18 @@ export class MediaManager {
       // 2. Original audio track : keep its reference to stop later
 
       if (this.publishMode !== 'camera') {
-        if (audioTracks.length > 0) {
-          // System audio share case, then mix it with device audio
-          audioStream = this.mixAudioStreams(stream, audioStream)
+        if (this.audioMode === 'microphone') {
+          // We don't touch audioStream if we only want microphone, it's already microphone
+        }
+        // Check if we have audio tracks, this means we got system audio
+        else if (audioTracks.length > 0) {
+          if (this.audioMode === 'system') {
+            // We only want system audio
+            audioStream = stream
+          } else if (this.audioMode === 'system+microphone') {
+            // We want both system audio and microphone, mix them
+            audioStream = this.mixAudioStreams(stream, audioStream)
+          }
         }
 
         this.updateAudioTrack(audioStream, streamId, null)

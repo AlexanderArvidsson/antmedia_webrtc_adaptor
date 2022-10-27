@@ -1,3 +1,13 @@
+# Note about this fork
+
+This is a heavily modified version of the SDK. The below documentation is **not** updated to the new functionality.
+The major difference is that it is entirely promise based, and it includes choosing audio mode (system-only, microphone-only and system+microphone), 
+various bugfixes, better publishing logic, and overall better error handling.
+
+It also allows the developer to customize the SDP handshake to force specific codec preset to be used. For example, it can be used to guarantee that the
+High profile is used when available (profile ID prefixed with 64). The original adaptor is unreliable which it chooses and the quality is severly degraded
+because of it, since it does not use the hardware encoder available in certain cases.
+
 # [Ant Media Server](https://antmedia.io/) WebRTC SDK
 
 WebSocket interface in publishing and playing WebRTC streams on Ant Media Server using Javascript.
