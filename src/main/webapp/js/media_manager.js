@@ -186,16 +186,6 @@ export class MediaManager {
     this.initialized = true
 
     return true
-
-    // if (typeof this.mediaConstraints.video != 'undefined' && this.mediaConstraints.video != false) {
-    //   await this.openStream(this.mediaConstraints)
-    // } else {
-    //   // get only audio
-    //   const media_audio_constraint = { audio: this.mediaConstraints.audio }
-    //   const stream = await this.getUserMedia(media_audio_constraint, true)
-
-    //   this.gotStream(stream)
-    // }
   }
 
   /*
@@ -215,11 +205,7 @@ export class MediaManager {
       this.callbackError('UnsecureContext')
       return
     }
-    if (
-      typeof navigator.mediaDevices == 'undefined' ||
-      navigator.mediaDevices == undefined ||
-      navigator.mediaDevices == null
-    ) {
+    if (typeof navigator.mediaDevices == 'undefined' || navigator.mediaDevices == null) {
       this.callbackError('getUserMediaIsNotAllowed')
     }
   }
@@ -255,10 +241,6 @@ export class MediaManager {
 
         if (this.inputDeviceNotFoundLimit < 2) {
           if (checkVideo != false) {
-            console.log('#######################################################')
-            console.log('#######################################################')
-            console.log('#######################################################')
-
             this.openStream({ video: true, audio: false })
             this.inputDeviceNotFoundLimit++
           } else {
@@ -343,14 +325,18 @@ export class MediaManager {
     }, 66)
   }
 
+  getMediaConstraints() {
+    const mediaConstraints = { ...this.mediaConstraints }
+    if (!this.audioMode) mediaConstraints.audio = false
+
+    return mediaConstraints
+  }
+
   async prepareStream(stream, streamId) {
-    let audioConstraint = false
-    if (this.mediaConstraints.audio) {
-      audioConstraint = this.mediaConstraints.audio
-    }
+    const { audio } = this.getMediaConstraints()
 
     if (this.smallVideoTrack) this.smallVideoTrack.stop()
-    return this.prepareStreamTracks(this.mediaConstraints, audioConstraint, stream, streamId)
+    return this.prepareStreamTracks(this.mediaConstraints, audio, stream, streamId)
   }
 
   /**
@@ -364,15 +350,15 @@ export class MediaManager {
    *
    * @param {*} mediaConstraints
    * @param {*} audioConstraint
-   * @param {*} stream
+   * @param {*} deviceStream
    * @param {*} streamId
    */
-  async prepareStreamTracks(mediaConstraints, audioConstraint, stream, streamId) {
+  async prepareStreamTracks(mediaConstraints, audioConstraint, deviceStream, streamId) {
     // this trick, getting audio and video separately, make us add or remove tracks on the fly
-    const audioTracks = stream.getAudioTracks()
+    const audioTracks = deviceStream.getAudioTracks()
     if (audioTracks.length > 0 && this.publishMode == 'camera') {
       audioTracks[0].stop()
-      stream.removeTrack(audioTracks[0])
+      deviceStream.removeTrack(audioTracks[0])
     }
 
     //add callback if desktop is sharing
@@ -381,47 +367,53 @@ export class MediaManager {
     }
 
     if (this.publishMode == 'screen') {
-      this.updateVideoTrack(stream, streamId, onEnded, true)
+      this.updateVideoTrack(deviceStream, streamId, onEnded, true)
     } else if (this.publishMode == 'screen+camera') {
-      this.setDesktopWithCameraSource(stream, streamId, onEnded)
+      this.setDesktopWithCameraSource(deviceStream, streamId, onEnded)
     }
 
     // now get only audio to add this stream
     if (audioConstraint) {
-      const media_audio_constraint = { audio: audioConstraint }
-
-      let audioStream = await this.getUserMedia(media_audio_constraint, true)
-
       // Here audioStream has one audio track only
-      audioStream = this.setGainNodeStream(audioStream)
-      // Now audio stream has two audio strams.
-      // 1. Gain Node : this will be added to local stream to publish
-      // 2. Original audio track : keep its reference to stop later
+      const audioStream = await this.prepareAudioStream(deviceStream, audioConstraint)
 
       if (this.publishMode !== 'camera') {
-        if (this.audioMode === 'microphone') {
-          // We don't touch audioStream if we only want microphone, it's already microphone
-        }
-        // Check if we have audio tracks, this means we got system audio
-        else if (audioTracks.length > 0) {
-          if (this.audioMode === 'system') {
-            // We only want system audio
-            audioStream = stream
-          } else if (this.audioMode === 'system+microphone') {
-            // We want both system audio and microphone, mix them
-            audioStream = this.mixAudioStreams(stream, audioStream)
-          }
-        }
-
         this.updateAudioTrack(audioStream, streamId, null)
       } else if (this.publishMode === 'camera') {
-        stream.addTrack(audioStream.getAudioTracks()[0])
+        deviceStream.addTrack(audioStream.getAudioTracks()[0])
       }
     }
 
-    this.gotStream(stream)
+    this.gotStream(deviceStream)
 
-    return stream
+    return deviceStream
+  }
+
+  async prepareAudioStream(deviceStream, audioConstraint) {
+    if (this.audioMode === 'microphone') {
+      let audioStream = await this.getUserMedia({ audio: audioConstraint }, true)
+      audioStream = this.setGainNodeStream(audioStream)
+
+      // Now audio stream has one audio stream.
+      // 1. Gain Node : this will be added to local stream to publish
+      return audioStream
+    } else if (this.audioMode === 'system') {
+      // We only want system audio
+      return deviceStream
+    } else if (this.audioMode === 'system+microphone') {
+      let audioStream = await this.getUserMedia({ audio: audioConstraint }, true)
+      audioStream = this.setGainNodeStream(audioStream)
+
+      // We want both system audio and microphone, mix them
+      audioStream = this.mixAudioStreams(deviceStream, audioStream)
+
+      // Now audio stream has two audio streams.
+      // 1. Gain Node : this will be added to local stream to publish
+      // 2. Original audio track : keep its reference to stop later
+      return audioStream
+    }
+
+    return deviceStream
   }
 
   /**
@@ -502,8 +494,10 @@ export class MediaManager {
   async openStream(mediaConstraints, streamId) {
     this.mediaConstraints = mediaConstraints
 
-    if (typeof mediaConstraints.video != 'undefined') {
-      const stream = await this.getMedia(mediaConstraints)
+    const mConstraints = this.getMediaConstraints()
+
+    if (typeof mConstraints.video != 'undefined') {
+      const stream = await this.getMedia(mConstraints)
       return this.prepareStream(stream, streamId)
     } else {
       this.localStream = null
@@ -580,8 +574,6 @@ export class MediaManager {
     if (this.localVideo) {
       this.localVideo.srcObject = stream
     }
-
-    //		this.getDevices();
   }
 
   /**
@@ -675,7 +667,9 @@ export class MediaManager {
    * @returns
    */
   setGainNodeStream(stream) {
-    if (this.mediaConstraints.audio) {
+    const mediaConstraints = this.getMediaConstraints()
+
+    if (mediaConstraints.audio) {
       // Get the videoTracks from the stream.
       const videoTracks = stream.getVideoTracks()
 
@@ -744,7 +738,9 @@ export class MediaManager {
   async switchDesktopCapture(streamId) {
     this.publishMode = 'screen'
 
-    const stream = await this.getMedia(this.mediaConstraints)
+    const mediaConstraints = this.getMediaConstraints()
+
+    const stream = await this.getMedia(mediaConstraints)
     return this.prepareStream(stream, streamId)
   }
 
@@ -757,7 +753,9 @@ export class MediaManager {
   async switchDesktopCaptureWithCamera(streamId) {
     this.publishMode = 'screen+camera'
 
-    const stream = await this.getMedia(this.mediaConstraints)
+    const mediaConstraints = this.getMediaConstraints()
+
+    const stream = await this.getMedia(mediaConstraints)
     return this.prepareStream(stream, streamId)
   }
 
@@ -771,15 +769,15 @@ export class MediaManager {
     if (this.localStream != null) {
       const audioTrack = this.localStream.getAudioTracks()[0]
 
-      if (audioTrack != null) newAudioTrack.onended = audioTrack.onended
+      if (audioTrack != null && newAudioTrack) newAudioTrack.onended = audioTrack.onended
 
       if (audioTrack != null && audioTrack != newAudioTrack) {
         this.tempTracks.push(audioTrack)
 
         this.localStream.removeTrack(audioTrack)
-        this.localStream.addTrack(newAudioTrack)
+        newAudioTrack && this.localStream.addTrack(newAudioTrack)
       } else {
-        this.localStream.addTrack(newAudioTrack)
+        newAudioTrack && this.localStream.addTrack(newAudioTrack)
       }
     } else {
       this.localStream = stream
@@ -846,7 +844,7 @@ export class MediaManager {
    */
   switchAudioInputSource(streamId, deviceId) {
     //stop the track because in some android devices need to close the current camera stream
-    var audioTrack = this.localStream.getAudioTracks()[0]
+    const audioTrack = this.localStream.getAudioTracks()[0]
     if (audioTrack) {
       audioTrack.stop()
     } else {
@@ -861,7 +859,7 @@ export class MediaManager {
       let tempMediaConstraints = { video: false, audio: { deviceId: deviceId } }
       this.setAudioInputSource(streamId, tempMediaConstraints, null, true, deviceId)
     } else {
-      this.setAudioInputSource(streamId, this.mediaConstraints, null, true, deviceId)
+      this.setAudioInputSource(streamId, this.getMediaConstraints(), null, true, deviceId)
     }
   }
 
@@ -870,12 +868,23 @@ export class MediaManager {
    * It calls updateAudioTrack function to update local audio stream.
    */
   async setAudioInputSource(streamId, mediaConstraints, onEndedCallback) {
-    let stream = await this.getUserMedia(mediaConstraints, true)
+    if (!mediaConstraints.audio) {
+      const audioTracks = this.devices.getAudioTracks()
 
-    stream = this.setGainNodeStream(stream)
-    this.updateAudioTrack(stream, streamId, mediaConstraints, onEndedCallback)
+      if (audioTracks.length > 0) {
+        audioTracks.forEach((track) => {
+          track.stop()
+          this.localStream.removeTrack(track)
+        })
+      }
 
-    return stream
+      return this.updateLocalAudioStream(this.localStream, onEndedCallback)
+    }
+
+    const audioStream = await this.prepareAudioStream(deviceStream, mediaConstraints.audio)
+    this.updateAudioTrack(audioStream, streamId, mediaConstraints, onEndedCallback)
+
+    return audioStream
   }
 
   /**
@@ -919,7 +928,13 @@ export class MediaManager {
         ' - Media constraints video property = ' +
         this.mediaConstraints.video,
     )
-    this.setVideoCameraSource(streamId, this.mediaConstraints, null, true, deviceId)
+    this.setVideoCameraSource(
+      streamId,
+      { video: this.getMediaConstraints().video },
+      null,
+      true,
+      deviceId,
+    )
 
     return deviceId
   }
@@ -986,7 +1001,7 @@ export class MediaManager {
 
     this.publishMode = 'camera'
     console.debug('Media constraints video property = ' + this.mediaConstraints.video)
-    this.setVideoCameraSource(streamId, { video: this.mediaConstraints.video }, null, true)
+    this.setVideoCameraSource(streamId, { video: this.getMediaConstraints().video }, null, true)
   }
 
   /**
@@ -1071,13 +1086,15 @@ export class MediaManager {
    * turns of the camera stream and starts streaming camera again instead of black dummy frame
    */
   async turnOnLocalCamera(streamId) {
+    const mediaConstraints = this.getMediaConstraints()
+
     if (this.blackFrameTimer != null) {
       clearInterval(this.blackFrameTimer)
       this.blackFrameTimer = null
     }
 
     if (this.localStream == null) {
-      const stream = await this.getUserMedia(this.mediaConstraints, false)
+      const stream = await this.getUserMedia({ video: mediaConstraints.video }, false)
 
       this.gotStream(stream)
 
@@ -1085,7 +1102,7 @@ export class MediaManager {
     }
     //This method will get the camera track and replace it with dummy track
     else {
-      const stream = await this.getUserMedia(this.mediaConstraints, false)
+      const stream = await this.getUserMedia({ video: mediaConstraints.video }, false)
 
       let choosenId
       if (streamId != null || typeof streamId != 'undefined') {
@@ -1144,6 +1161,21 @@ export class MediaManager {
       videoSender = this.getSender(streamId, 'video')
     }
     return videoSender
+  }
+
+  /**
+   * Called by User
+   * to set audio mode
+   */
+  async changeAudioMode(audioMode, streamId) {
+    this.audioMode = audioMode
+
+    const mediaConstraints = this.getMediaConstraints()
+
+    const videoSender = this.getVideoSender(streamId)
+    if (videoSender != null) {
+      return await this.applyConstraints(mediaConstraints, streamId)
+    }
   }
 
   /**
@@ -1222,17 +1254,13 @@ export class MediaManager {
       // console.log("Added sound meter for stream: " + streamId + " = " + soundMeter.instant.toFixed(2));
     })
   }
-
-  applyConstraints(streamId, newConstaints) {
-    this.applyConstraints(newConstaints)
-  }
   /**
    * Called by user
    * To change audio/video constraints on the fly
    *
    */
-  applyConstraints(newConstraints) {
-    var constraints = {}
+  async applyConstraints(newConstraints, streamId) {
+    let constraints = {}
     if (newConstraints.audio === undefined && newConstraints.video === undefined) {
       //if audio or video field is not defined, assume that it's a video constraint
       constraints.video = newConstraints
@@ -1260,10 +1288,12 @@ export class MediaManager {
       )
     }
 
-    var promise = null
-    if (constraints.video !== undefined) {
+    const mediaConstraints = this.getMediaConstraints()
+
+    let promise = Promise.resolve()
+    if (mediaConstraints.video !== undefined) {
       if (this.localStream && this.localStream.getVideoTracks().length > 0) {
-        var videoTrack = this.localStream.getVideoTracks()[0]
+        const videoTrack = this.localStream.getVideoTracks()[0]
         promise = videoTrack.applyConstraints(this.mediaConstraints.video)
       } else {
         promise = new Promise((resolve, reject) => {
@@ -1272,10 +1302,11 @@ export class MediaManager {
       }
     }
 
-    if (constraints.audio !== undefined) {
-      //just give the audio constraints not to get video stream
-      promise = this.setAudioInputSource(streamId, { audio: this.mediaConstraints.audio }, null)
+    if (mediaConstraints.audio !== undefined && streamId) {
+      // just give the audio constraints not to get video stream
+      promise = this.setAudioInputSource(streamId, { audio: mediaConstraints.audio }, null)
     }
+
     return promise
   }
 }

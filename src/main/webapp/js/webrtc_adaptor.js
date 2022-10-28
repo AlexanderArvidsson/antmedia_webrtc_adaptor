@@ -414,6 +414,13 @@ export class WebRTCAdaptor {
   }
 
   /**
+   * Check if WebSocket is connected
+   */
+  isConnected() {
+    return this.webSocketAdaptor.isConnected()
+  }
+
+  /**
    * Called to get a stream information for a specific stream. AMS responds with streamInformation message.
    * Parameters:
    * 	 streamId: unique id for the stream that you want to get info about
@@ -1568,6 +1575,10 @@ export class WebRTCAdaptor {
   }
   applyConstraints(constraints) {
     this.mediaManager.applyConstraints(constraints)
+  }
+
+  changeAudioMode(audioMode, streamId) {
+    this.mediaManager.changeAudioMode(audioMode, streamId)
   }
 
   changeBandwidth(bandwidth, streamId) {
