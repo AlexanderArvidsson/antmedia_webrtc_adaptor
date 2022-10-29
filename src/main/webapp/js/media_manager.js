@@ -1172,10 +1172,24 @@ export class MediaManager {
 
     const mediaConstraints = this.getMediaConstraints()
 
-    const videoSender = this.getVideoSender(streamId)
-    if (videoSender != null) {
-      return await this.applyConstraints(mediaConstraints, streamId)
+    let promise = Promise.resolve()
+    if (mediaConstraints.video !== undefined) {
+      if (this.localStream && this.localStream.getVideoTracks().length > 0) {
+        const videoTrack = this.localStream.getVideoTracks()[0]
+        promise = videoTrack.applyConstraints(this.mediaConstraints.video)
+      } else {
+        promise = new Promise((resolve, reject) => {
+          reject('There is no video track to apply constraints')
+        })
+      }
     }
+
+    if (mediaConstraints.audio !== undefined && streamId) {
+      // just give the audio constraints not to get video stream
+      promise = this.setAudioInputSource(streamId, { audio: mediaConstraints.audio }, null)
+    }
+
+    return promise
   }
 
   /**
