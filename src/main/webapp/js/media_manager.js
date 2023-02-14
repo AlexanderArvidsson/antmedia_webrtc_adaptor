@@ -68,6 +68,11 @@ export class MediaManager {
      */
     this.audioMode = 'system+microphone' //system, microphone, system+microphone
 
+    /*
+     * audio device ID is determined by the user
+     */
+    this.audioInputDeviceId = undefined
+
     /**
      * The values of the above fields are provided as user parameters by the constructor.
      * TODO: Also some other hidden parameters may be passed here
@@ -328,6 +333,9 @@ export class MediaManager {
   getMediaConstraints() {
     const mediaConstraints = { ...this.mediaConstraints }
     if (!this.audioMode) mediaConstraints.audio = false
+    else {
+      mediaConstraints.audio.deviceId = this.audioInputDeviceId
+    }
 
     return mediaConstraints
   }
@@ -869,20 +877,29 @@ export class MediaManager {
    */
   async setAudioInputSource(streamId, mediaConstraints, onEndedCallback) {
     if (!mediaConstraints.audio) {
-      const audioTracks = this.devices.getAudioTracks()
+      if (this.localStream != null) {
+        const audioTracks = this.localStream.getAudioTracks()
 
-      if (audioTracks.length > 0) {
-        audioTracks.forEach((track) => {
-          track.stop()
-          this.localStream.removeTrack(track)
-        })
+        if (audioTracks.length > 0) {
+          audioTracks.forEach((track) => {
+            track.stop()
+            this.localStream.removeTrack(track)
+          })
+        }
+
+        return this.updateLocalAudioStream(this.localStream, onEndedCallback)
       }
 
-      return this.updateLocalAudioStream(this.localStream, onEndedCallback)
+      return
     }
 
+    const deviceStream = await this.getUserMedia(mediaConstraints)
+
     const audioStream = await this.prepareAudioStream(deviceStream, mediaConstraints.audio)
-    this.updateAudioTrack(audioStream, streamId, mediaConstraints, onEndedCallback)
+
+    if (this.localStream != null) {
+      this.updateAudioTrack(audioStream, streamId, mediaConstraints, onEndedCallback)
+    }
 
     return audioStream
   }
@@ -1173,14 +1190,39 @@ export class MediaManager {
     const mediaConstraints = this.getMediaConstraints()
 
     let promise = Promise.resolve()
-    if (mediaConstraints.video !== undefined) {
-      if (this.localStream && this.localStream.getVideoTracks().length > 0) {
+    if (mediaConstraints.video !== undefined && this.localStream) {
+      if (this.localStream.getVideoTracks().length > 0) {
         const videoTrack = this.localStream.getVideoTracks()[0]
         promise = videoTrack.applyConstraints(this.mediaConstraints.video)
       } else {
-        promise = new Promise((resolve, reject) => {
-          reject('There is no video track to apply constraints')
-        })
+        promise = Promise.reject('There is no video track to apply constraints')
+      }
+    }
+
+    if (mediaConstraints.audio !== undefined && streamId) {
+      // just give the audio constraints not to get video stream
+      promise = this.setAudioInputSource(streamId, { audio: mediaConstraints.audio }, null)
+    }
+
+    return promise
+  }
+
+  /**
+   * Called by User
+   * to set audio input device ID
+   */
+  async changeAudioInputDevice(deviceId, streamId) {
+    this.audioInputDeviceId = deviceId
+
+    const mediaConstraints = this.getMediaConstraints()
+
+    let promise = Promise.resolve()
+    if (mediaConstraints.video !== undefined && this.localStream) {
+      if (this.localStream.getVideoTracks().length > 0) {
+        const videoTrack = this.localStream.getVideoTracks()[0]
+        promise = videoTrack.applyConstraints(this.mediaConstraints.video)
+      } else {
+        promise = Promise.reject('There is no video track to apply constraints')
       }
     }
 

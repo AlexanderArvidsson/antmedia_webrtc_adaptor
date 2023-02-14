@@ -1541,6 +1541,9 @@ export class WebRTCAdaptor {
   unmuteLocalMic() {
     this.mediaManager.unmuteLocalMic()
   }
+  switchMediaSource(streamId, sourceId) {
+    return this.mediaManager.switchMediaSource(streamId, sourceId)
+  }
   switchDesktopCapture(streamId) {
     return this.mediaManager.switchDesktopCapture(streamId)
   }
@@ -1579,6 +1582,10 @@ export class WebRTCAdaptor {
 
   changeAudioMode(audioMode, streamId) {
     this.mediaManager.changeAudioMode(audioMode, streamId)
+  }
+
+  changeAudioInputDevice(deviceId, streamId) {
+    this.mediaManager.changeAudioInputDevice(deviceId, streamId)
   }
 
   changeBandwidth(bandwidth, streamId) {
