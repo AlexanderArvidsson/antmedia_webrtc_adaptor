@@ -1,6 +1,6 @@
-import adapter from "./external/adapter-latest";
 import { SoundMeter } from "./soundmeter.js";
 import "./external/loglevel.min.js";
+import "./external/adapter-latest.js";
 
 const Logger = window.log;
 /**
@@ -213,7 +213,9 @@ export class MediaManager {
         /**
          * html video element that presents local stream
          */
-        this.localVideo = this.localVideoElement || document.getElementById(this.localVideoId);
+        this.localVideo =
+            this.localVideoElement ||
+            (this.localVideoId ? document.getElementById(this.localVideoId) : null);
 
         // A dummy stream created to replace the tracks when camera is turned off.
         this.dummyCanvas = document.createElement("canvas");
@@ -250,7 +252,7 @@ export class MediaManager {
     /**
      * Called by the WebRTCAdaptor at the start if it isn't play mode
      */
-    initLocalStream(streamId) {
+    async initLocalStream(streamId) {
         this.checkWebRTCPermissions();
         if (
             typeof this.mediaConstraints.video != "undefined" &&
@@ -263,13 +265,11 @@ export class MediaManager {
         ) {
             // get only audio
             var media_audio_constraint = { audio: this.mediaConstraints.audio };
-            return this.getUserMedia(
-                media_audio_constraint,
-                (stream) => {
-                    return this.gotStream(stream);
-                },
-                true,
-            );
+            const stream = await this.getUserMedia(media_audio_constraint, true);
+
+            this.gotStream(stream);
+
+            return stream;
         } else {
             //neither video nor audio is requested
             //just return null stream
@@ -555,27 +555,19 @@ export class MediaManager {
                 resolve(stream);
             });
         } else {
-            return navigator.mediaDevices
-                .getUserMedia(mediaConstraints)
-                .then((stream) => {
-                    if (typeof func != "undefined" || func != null) {
-                        func(stream);
-                    }
-                    return stream;
-                })
-                .catch((error) => {
-                    if (catch_error == true) {
-                        if (error.name == "NotFoundError") {
-                            this.getDevices();
-                        } else {
-                            this.callbackError(error.name, error.message);
-                        }
+            return navigator.mediaDevices.getUserMedia(mediaConstraints).catch((error) => {
+                if (catch_error == true) {
+                    if (error.name == "NotFoundError") {
+                        this.getDevices();
                     } else {
-                        Logger.warn(error);
+                        this.callbackError(error.name, error.message);
                     }
-                    //throw error if there is a promise
-                    throw error;
-                });
+                } else {
+                    Logger.warn(error);
+                }
+                //throw error if there is a promise
+                throw error;
+            });
         }
     }
 
@@ -620,15 +612,9 @@ export class MediaManager {
     /**
      * Called to get the media (User Media or Display Media)
      * @param {*} mediaConstraints
+     * @param {*} streamId, streamId to be used to replace track if there is an active peer connection
      */
-    async getMedia(mediaConstraints) {
-        const mConstraints = this.getMediaConstraints();
-
-        var audioConstraint = false;
-        if (typeof mConstraints.audio != "undefined" && mConstraints.audio != false) {
-            audioConstraint = mediaConstraints.audio;
-        }
-
+    getMedia(mediaConstraints, streamId) {
         if (this.desktopCameraCanvasDrawerTimer != null) {
             clearInterval(this.desktopCameraCanvasDrawerTimer);
             this.desktopCameraCanvasDrawerTimer = null;
@@ -636,36 +622,17 @@ export class MediaManager {
 
         // Check Media Constraint video value screen or screen + camera
         if (this.publishMode == "screen+camera" || this.publishMode == "screen") {
-            return this.getDisplayMedia(mediaConstraints).then((stream) => {
-                if (this.smallVideoTrack) this.smallVideoTrack.stop();
-                return this.prepareStreamTracks(
-                    mediaConstraints,
-                    audioConstraint,
-                    stream,
-                    streamId,
-                );
-            });
+            return this.getDisplayMedia(mediaConstraints);
         }
         // If mediaConstraints only user camera
         else {
-            return this.getUserMedia(mediaConstraints, true)
-                .then((stream) => {
-                    if (this.smallVideoTrack) this.smallVideoTrack.stop();
-                    return this.prepareStreamTracks(
-                        mediaConstraints,
-                        audioConstraint,
-                        stream,
-                        streamId,
-                    );
-                })
-
-                .catch((error) => {
-                    if (error.name == "NotFoundError") {
-                        this.getDevices();
-                    } else {
-                        this.callbackError(error.name, error.message);
-                    }
-                });
+            return this.getUserMedia(mediaConstraints, true).catch((error) => {
+                if (error.name == "NotFoundError") {
+                    this.getDevices();
+                } else {
+                    this.callbackError(error.name, error.message);
+                }
+            });
         }
     }
 
@@ -678,7 +645,7 @@ export class MediaManager {
         const mConstraints = this.getMediaConstraints();
 
         if (typeof mConstraints.video != "undefined") {
-            const stream = await this.getMedia(mConstraints);
+            const stream = await this.getMedia(mConstraints, streamId);
 
             if (
                 this.mediaConstraints.video != "dummy" &&
@@ -968,7 +935,7 @@ export class MediaManager {
 
         const mediaConstraints = this.getMediaConstraints();
 
-        const stream = await this.getMedia(mediaConstraints);
+        const stream = await this.getMedia(mediaConstraints, streamId);
         return this.prepareStream(stream, streamId);
     }
 
@@ -983,7 +950,7 @@ export class MediaManager {
 
         const mediaConstraints = this.getMediaConstraints();
 
-        const stream = await this.getMedia(mediaConstraints);
+        const stream = await this.getMedia(mediaConstraints, streamId);
         return this.prepareStream(stream, streamId);
     }
 

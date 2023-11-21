@@ -1,108 +1,88 @@
-# Note about this fork
-
-This is a heavily modified version of the SDK. The below documentation is **not** updated to the new functionality.
-The major difference is that it is entirely promise based, and it includes choosing audio mode (system-only, microphone-only and system+microphone), 
-various bugfixes, better publishing logic, and overall better error handling.
-
-It also allows the developer to customize the SDP handshake to force specific codec preset to be used. For example, it can be used to guarantee that the
-High profile is used when available (profile ID prefixed with 64). The original adaptor is unreliable which it chooses and the quality is severly degraded
-because of it, since it does not use the hardware encoder available in certain cases.
-
 # [Ant Media Server](https://antmedia.io/) WebRTC SDK
 
 WebSocket interface in publishing and playing WebRTC streams on Ant Media Server using Javascript.
 
 For more information, visit [antmedia.io](https://antmedia.io)
 
-[![NPM version](https://img.shields.io/badge/npm-v2.4.3-informational)](https://www.npmjs.com/package/@metamist/ant_webrtc_adaptor)
+
+[![NPM version](https://img.shields.io/badge/npm-v2.4.3-informational)](https://www.npmjs.com/package/@antmedia/webrtc_adaptor)
 [![Build Status](https://api.travis-ci.com/ant-media/StreamApp.svg?branch=master)](https://app.travis-ci.com/github/ant-media/StreamApp)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=io.antmedia%3Aant-media-server&metric=alert_status)](https://sonarcloud.io/dashboard?id=io.antmedia%3Aant-media-server)
 
 ## <a name="installation"></a>Installation
 
 Using npm:
-
 ```shell
-$ npm install @metamist/ant_webrtc_adaptor
+$ npm install @antmedia/webrtc_adaptor
 ```
 
 Using yarn:
-
 ```shell
-$ yarn add @metamist/ant_webrtc_adaptor
+$ yarn add @antmedia/webrtc_adaptor
 ```
 
 ## <a name="requirements"></a>Requirements
 
 Before start using Ant Media Server WebRTC SDK, you need a distribution of the Ant Media Server running on a server or local machine.
-[Quick Start - Ant Media Server](https://resources.antmedia.io/docs/quick-start)
+[Quick Start - Ant Media Server](https://antmedia.io/docs/)
 
 ## <a name="usage">Usage
 
 In your project, run:
 
 ```
-npm i @metamist/ant_webrtc_adaptor --save-dev
+npm i @antmedia/webrtc_adaptor --save-dev
 ```
-
 Then inside your javascript file:
-
 #### <a name="initialize">Initialize the WebRTCAdaptor
-
 ```javascript
-// ...
-import { WebRTCAdaptor } from '@ant-media/webrtc_adaptor'
+  // ...
+import { WebRTCAdaptor } from '@antmedia/webrtc_adaptor';
 
 const webRTCAdaptor = new WebRTCAdaptor({
-  websocket_url: 'wss://your-domain.tld:5443/WebRTCAppEE/websocket',
-  mediaConstraints: {
-    video: true,
-    audio: true,
-  },
-  peerconnection_config: {
-    iceServers: [{ urls: 'stun:stun1.l.google.com:19302' }],
-  },
-  sdp_constraints: {
-    OfferToReceiveAudio: false,
-    OfferToReceiveVideo: false,
-  },
-  localVideoId: 'id-of-video-element', // <video id="id-of-video-element" autoplay muted></video>
-  bandwidth: int | string, // default is 900 kbps, string can be 'unlimited'
-  dataChannelEnabled: true | false, // enable or disable data channel
-  callback: (info, obj) => {}, // check info callbacks bellow
-  callbackError: function (error, message) {}, // check error callbacks bellow
-})
+    websocket_url: "wss://your-domain.tld:5443/WebRTCAppEE/websocket",
+    mediaConstraints: {
+        video: true,
+        audio: true,
+    },
+    peerconnection_config: {
+        'iceServers': [{'urls': 'stun:stun1.l.google.com:19302'}]
+    },
+    sdp_constraints: {
+        OfferToReceiveAudio : false,
+        OfferToReceiveVideo : false,
+    },
+    localVideoId: "id-of-video-element", // <video id="id-of-video-element" autoplay muted></video>
+    bandwidth: int|string, // default is 900 kbps, string can be 'unlimited'
+    dataChannelEnabled: true|false, // enable or disable data channel
+    callback: (info, obj) => {}, // check info callbacks bellow
+    callbackError: function(error, message) {}, // check error callbacks bellow
+});
 //...
 ```
-
 In another part of your script:
-
 #### <a name="publish">Publish
-
 ```javascript
 // You can start streaming by calling the publish method
-webRTCAdaptor.publish(streamId)
+webRTCAdaptor.publish(streamId);
 ```
 
 #### <a name="play">Play
-
 ```javascript
 // You can start streaming by calling the publish method
-webRTCAdaptor.play(streamId)
+webRTCAdaptor.play(streamId);
 ```
 
 ## Samples
-
-Visit The [Samples List](https://resources.antmedia.io/docs/sample-tools-and-applications) and look at their [sources codes](https://github.com/ant-media/StreamApp/tree/master/src/main/webapp)
+Visit The [Samples List](https://antmedia.io/webrtc-samples/) and look at their [sources codes](https://github.com/ant-media/StreamApp/tree/master/src/main/webapp)
 
 ## <a name="documentation">Documentation
-
-[Javascript SDK Documentation](https://resources.antmedia.io/docs/javascript-sdk)
+[Javascript SDK Documentation](https://antmedia.io/docs/guides/developer-sdk-and-api/sdk-integration/javascript-sdk/)
 
 ## <a name="livedemo">Live Demo
-
 You can check our [live demo](https://antmedia.io/live-demo).
 
 ## <a name="issues">Issues
-
 Create issues on the [Ant-Media-Server](https://github.com/ant-media/Ant-Media-Server/issues)
+
+

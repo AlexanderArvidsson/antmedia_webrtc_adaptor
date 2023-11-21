@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-node@v3
-        with: 
+        with:
          node-version: '16.x'
            # Setup .npmrc file to publish to npm
          registry-url: 'https://registry.npmjs.org'
@@ -21,10 +21,12 @@ jobs:
           distribution: 'adopt'
       - name: Get the version
         id: get_version
-        run: echo "::set-output name=VERSION::$(echo ${GITHUB_REF##*/} | cut -d v -f 2)"
+        run: echo "VERSION=$(echo ${GITHUB_REF##*/} | cut -d v -f 2)" >> $GITHUB_OUTPUT
       - run: npm install
+      - run: npm test
+      - run: npm run compile
       - run: npm version ${{steps.get_version.outputs.VERSION}} --no-git-tag-version
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
-  
+

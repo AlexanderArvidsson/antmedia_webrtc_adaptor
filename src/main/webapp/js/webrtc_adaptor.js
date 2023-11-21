@@ -434,8 +434,6 @@ export class WebRTCAdaptor {
      * 	-start websocket connection
      */
     async initialize() {
-        await this.ensureWebSocketConnection();
-
         if (
             !this.isPlayMode &&
             !this.onlyDataChannel &&
@@ -447,7 +445,8 @@ export class WebRTCAdaptor {
                 .initialize()
                 .then(() => {
                     this.initPlugins();
-                    this.checkWebSocketConnection();
+                    this.ensureWebSocketConnection();
+
                     return new Promise((resolve, reject) => {
                         resolve("Wait 'initialized' callback from websocket");
                     });
@@ -460,7 +459,8 @@ export class WebRTCAdaptor {
 
         return new Promise((resolve, reject) => {
             this.initPlugins();
-            this.checkWebSocketConnection();
+            this.ensureWebSocketConnection();
+
             resolve("Wait 'initialized' callback from websocket");
         });
     }
@@ -503,8 +503,10 @@ export class WebRTCAdaptor {
         }
         //If it started with playOnly mode and wants to publish now
         else if (this.mediaManager.localStream == null) {
+            // await this.mediaManager
             await this.mediaManager
-                .initLocalStream(this.mediaConstraints, streamId)
+                .openStream(this.mediaConstraints, streamId)
+                // .initLocalStream(this.mediaConstraints, streamId)
                 .then(() => {
                     var videoEnabled = false;
                     var audioEnabled = false;
@@ -1793,14 +1795,14 @@ export class WebRTCAdaptor {
                 this.webSocketAdaptor = new WebSocketAdaptor({
                     websocket_url: this.websocketURL,
                     webrtcadaptor: this,
-                    callback: (definition, ...args) => {
+                    callback: (info, ...args) => {
                         if (info == "closed") {
                             this.reconnectIfRequired();
                         }
 
-                        if (definition === "initialized") resolve();
+                        if (info === "initialized") resolve();
 
-                        this.notifyEventListeners(definition, ...args);
+                        this.notifyEventListeners(info, ...args);
                     },
                     callbackError: (error, message) => {
                         this.notifyErrorEventListeners(error, message);
@@ -2237,15 +2239,15 @@ export class WebRTCAdaptor {
      * @param {string} streamId
      */
     changeAudioMode(audioMode, streamId) {
-        this.mediaManager.changeAudioMode(audioMode, streamId);
+        return this.mediaManager.changeAudioMode(audioMode, streamId);
     }
 
     changeAudioInputDevice(deviceId, streamId) {
-        this.mediaManager.changeAudioInputDevice(deviceId, streamId);
+        return this.mediaManager.changeAudioInputDevice(deviceId, streamId);
     }
 
     enableAudioLevelWhenMuted() {
-        this.mediaManager.enableAudioLevelWhenMuted();
+        return this.mediaManager.enableAudioLevelWhenMuted();
     }
 
     disableAudioLevelWhenMuted() {

@@ -1,55 +1,15 @@
 <!doctype html>
 <html lang="en">
 <head>
-<title>Ant Media Server WebRTC Player</title>
+<title>WebRTC Samples > Play</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta charset="UTF-8">
 <link rel="stylesheet" href="css/external/bootstrap4/bootstrap.min.css" />
 <script src="js/external/adapter-latest.js"></script>
+<link rel="stylesheet" href="css/samples.css" />
 <link rel="stylesheet" href="css/common.css" />
 <style>
-video {
-	width: 100%;
-	max-width: 640px;
-}
 
-/* Everything but the jumbotron gets side spacing for mobile first views */
-.header, .marketing, .footer {
-	padding: 15px;
-}
-
-/* Custom page header */
-.header {
-	padding-bottom: 20px;
-}
-
-/* Customize container */
-@media ( min-width : 768px) {
-	.container {
-		max-width: 730px;
-	}
-}
-
-.container-narrow>hr {
-	margin: 30px 0;
-}
-
-/* Main marketing message and sign up button */
-.jumbotron {
-	text-align: center;
-}
-
-/* Responsive: Portrait tablets and up */
-@media screen and (min-width: 768px) {
-	/* Remove the padding we set earlier */
-	.header, .marketing, .footer {
-		padding-right: 0;
-		padding-left: 0;
-	}
-}
-.options {
-		display:none;
-	}
 #video-overlay {
 	position: absolute;
 	left: 25%;
@@ -62,13 +22,6 @@ video {
 	width: 25%;
 }
 
-.message_area {
-	height: 300px;
-	overflow-y: auto;
-	border-style: groove;
-	border-width: thin;
-	background-color: white;
-}
 </style>
 </head>
 <body>
@@ -76,21 +29,15 @@ video {
 	<div class="container">
 		<div class="header clearfix">
 			<div class="row">
-				<h3 class="col text-muted">WebRTC Play</h3>
-				<nav class="col align-self-center">
-					<ul class="nav float-right">
-						<li><a href="http://antmedia.io">Contact</a></li>
-					</ul>
-				</nav>
+				<h3 class="col text-muted"><a href="samples.html">WebRTC Samples</a> > Play</h3>
 			</div>
 		</div>
 
 
 		<div class="jumbotron">
 			<div class="alert alert-primary text-center enterprise-feature" role="alert" style="margin-top:-2em">
-				WebRTC Playback is an Enterprise Edition. <br/>
+				WebRTC Playback is an enterprise edition feature. <br/>
 				<a href="https://antmedia.io">Try Enterprise Edition for free at antmedia.io</a> <br/><br/>
-				<a href="https://github.com/ant-media/Ant-Media-Server/wiki#community-edition--enterprise-edition" style="font-size:12px">Comparison between Community and Enterprise</a>		 
 			</div>
 			<div class="col-sm-12 form-group">
 				<div id='video-overlay'>
@@ -131,17 +78,17 @@ video {
 						<input id="file-input" type="file" name="name" accept="image/x-png,image/gif,image/jpeg" style="display: none" />
 					</div>
 				</div>
-				
+
 			</div>
 
-			
+
 				<div class="form-group">
 					<button class="btn btn-primary"
 						id="start_play_button">Start Playing</button>
 					<button class="btn btn-primary"
 						id="stop_play_button">Stop Playing</button>
 				</div>
-				
+
 				<div class="col-sm-10 offset-sm-1" id="stats_panel" style="display: none;">
 					<div class="row text-muted text-left">
 						<div class="col-sm-6">
@@ -151,7 +98,7 @@ video {
 							<div id="packet_lost_container">PacketsLost: <span id="packet_lost_text"></span></div>
 							<div id="jitter_container">Jitter Average Delay(Secs): <span id="jitter_text"></span></div>
 							<div id="audio_level_container">Audio Level: <span id="audio_level"></span></div>
-							
+
 						</small>
 						</div>
 						<div class="col-sm-6">
@@ -169,24 +116,27 @@ video {
 
 		</div>
 		<footer class="footer text-center">
-			<p>
-				<a href="http://antmedia.io">Ant Media Server</a>
-			</p>
+			<p><a href="http://antmedia.io">antmedia.io</a></p>
 		</footer>
 	</div>
 
 	<script src="js/external/jquery-3.4.1.min.js"  crossorigin="anonymous"></script>
 	<script src="js/external/popper.min.js" crossorigin="anonymous"></script>
 	<script src="js/external/bootstrap.min.js"  crossorigin="anonymous"></script>
+	<script src="js/external/notify.min.js" crossorigin="anonymous"></script>
 
 </body>
 <script type="module">
 	import {WebRTCAdaptor} from "./js/webrtc_adaptor.js"
 	import {getUrlParameter} from "./js/fetch.stream.js"
+	import {errorHandler} from "./js/utility.js"
+	import "./js/external/loglevel.min.js";
 
+	const Logger = window.log;
+	Logger.setLevel("debug");
 
 	var token = getUrlParameter("token");
-    
+
 
 	$(function() {
 	  var id = getUrlParameter("id");
@@ -197,7 +147,7 @@ video {
 		id = getUrlParameter("name");
 		if (typeof id != "undefined") {
 			$("#streamName").val(id);
-		} 
+		}
 		else {
 			$("#streamName").val("stream1");
 		}
@@ -207,7 +157,7 @@ video {
 
 	var subscriberId = getUrlParameter("subscriberId");
 	var subscriberCode = getUrlParameter("subscriberCode");
-		
+
 	var start_play_button = document.getElementById("start_play_button");
 	start_play_button.addEventListener("click", startPlaying, false)
 	var stop_play_button = document.getElementById("stop_play_button");
@@ -221,7 +171,7 @@ video {
 	streamNameBox.defaultValue = "stream1";
 
 	var streamId;
-	
+
 	function toggleOptions() {
 		$(".options").toggle();
 	}
@@ -230,18 +180,26 @@ video {
 		try {
 			var iceState = webRTCAdaptor.iceConnectionState(streamId);
             if (iceState != null && iceState != "failed" && iceState != "disconnected") {
-            
+
 				webRTCAdaptor.sendData($("#streamName").val(), $("#dataTextbox").val());
 				$("#all-messages").append("Sent: " + $("#dataTextbox").val() + "<br>");
 				$("#dataTextbox").val("");
 			}
 			else {
-				alert("WebRTC playing is not active. Please click Start Playing first")
+				$.notify("WebRTC playing is not active. Please click Start Playing first", {
+					autoHideDelay:5000,
+					className:'error',
+					position:'top center'
+				});
 			}
 		}
 		catch (exception) {
 			console.error(exception);
-			alert("Message cannot be sent. Make sure you've enabled data channel and choose the correct player distribution on server web panel");
+			$.notify("Warning: Message cannot be sent. Make sure you've enabled data channel and choose the correct player distribution on server web panel", {
+				autoHideDelay:5000,
+				className:'error',
+				position:'top center'
+			});
 		}
 	}
 
@@ -280,13 +238,19 @@ video {
         ) {
           webRTCAdaptor.sendData(streamNameBox.value, data);
         } else {
-          alert("WebRTC connection is not active. Please click start first");
+			$.notify("WebRTC connection is not active. Please click start first", {
+				autoHideDelay:5000,
+				className:'error',
+				position:'top center'
+			});
         }
       } catch (exception) {
         console.error(exception);
-        alert(
-          "Message cannot be sent. Make sure you've enabled data channel on server web panel"
-        );
+		  $.notify("Message cannot be sent. Make sure you've enabled data channel on server web panel", {
+			  autoHideDelay:5000,
+			  className:'error',
+			  position:'top center'
+		  });
       }
     }
 
@@ -298,7 +262,7 @@ video {
 
 		$('<img src =' + imageUrl +' style="width:100px;"><br>').appendTo($("#all-messages"));
     }
-	
+
 	function startPlaying() {
 		streamId = streamNameBox.value;
 		webRTCAdaptor.play(streamNameBox.value, token, "", [], subscriberId, subscriberCode);
@@ -323,11 +287,11 @@ video {
 		video : false,
 		audio : false
 	};
-	
+
 	var appName = location.pathname.substring(0, location.pathname.lastIndexOf("/")+1);
 	var path =  location.hostname + ":" + location.port + appName + "websocket";
 	var websocketURL =  "ws://" + path;
-	
+
 	if (location.protocol.startsWith("https")) {
 		websocketURL = "wss://" + path;
 	}
@@ -361,7 +325,7 @@ video {
 				console.log("play started");
 				start_play_button.disabled = true;
 				stop_play_button.disabled = false;
-				webRTCAdaptor.getStreamInfo(streamId); 
+				webRTCAdaptor.getStreamInfo(streamId);
 				webRTCAdaptor.enableStats(obj.streamId);
 
 			} else if (info == "play_finished") {
@@ -371,7 +335,7 @@ video {
 				stop_play_button.disabled = true;
 				$("#stats_panel").hide();
 				// Reset stream resolutions in dropdown
-				document.getElementById("dropdownMenu").innerHTML = '<a class="dropdown-item active" href="#">Automatic</a>'; 
+				document.getElementById("dropdownMenu").innerHTML = '<a class="dropdown-item active" href="#">Automatic</a>';
 			} else if (info == "closed") {
 				//console.log("Connection closed");
 				if (typeof obj != "undefined") {
@@ -385,8 +349,8 @@ video {
 				obj["streamInfo"].forEach(function(entry) {
 					//It's needs to both of VP8 and H264. So it can be dublicate
 					if(!streamResolutions.includes(entry["streamHeight"])){
-						streamResolutions.push(entry["streamHeight"]);	
-					}	
+						streamResolutions.push(entry["streamHeight"]);
+					}
 				});
 				// Sort stream resolutions for good UI :)
 				streamResolutions = streamResolutions.sort(function(a, b){return a-b});
@@ -400,7 +364,7 @@ video {
 
 				$('.dropdown-menu a').click(function(){
 					var dropdownSelectedItem = $(this).text();
- 					
+
  					if(dropdownSelectedItem == "Automatic"){
  						//It should 0p because of replacing "p" character in below
  						dropdownSelectedItem = "0p";
@@ -413,11 +377,11 @@ video {
     				webRTCAdaptor.forceStreamQuality(streamId, Number(dropdownSelectedItem));
 
 					// Remove current active item
-					$('a.dropdown-item.active').removeClass("active"); 
+					$('a.dropdown-item.active').removeClass("active");
 					// Add active in new item
-					$(this).addClass("active"); 
+					$(this).addClass("active");
 				});
-			}		
+			}
 			else if (info == "ice_connection_state_changed") {
 				console.log("iceConnectionState Changed: ",JSON.stringify(obj));
 			}
@@ -435,7 +399,7 @@ video {
 				else {
 					$("#average_bit_rate_container").hide();
 				}
-				$("#latest_bit_rate").text(obj.currentIncomingBitrate);	
+				$("#latest_bit_rate").text(obj.currentIncomingBitrate);
 				if (obj.currentIncomingBitrate > 0) {
 					$("#latest_bit_rate_container").show();
 				}
@@ -443,7 +407,7 @@ video {
 					$("#latest_bit_rate_container").hide();
 				}
 
-				var packetLost = parseInt(obj.videoPacketsLost) + parseInt(obj.audioPacketsLost);	
+				var packetLost = parseInt(obj.videoPacketsLost) + parseInt(obj.audioPacketsLost);
 				$("#packet_lost_text").text(packetLost);
 				if (packetLost > -1) {
 					$("#packet_lost_container").show();
@@ -469,7 +433,7 @@ video {
 					$("#audio_level_container").hide();
 				}
 
-				
+
 				$("#frame_width").text(obj.frameWidth);
 				$("#frame_height").text(obj.frameHeight);
 				if (obj.frameWidth > 0 && obj.frameHeight > 0) {
@@ -478,9 +442,9 @@ video {
 				else {
 					$("#incoming_resolution_container").hide();
 				}
-				$("#frame_received").text(obj.framesReceived);	
+				$("#frame_received").text(obj.framesReceived);
 				if (obj.framesReceived > -1) {
-					$("#frame_received_container").show();	
+					$("#frame_received_container").show();
 				}
 				else {
 					$("#frame_received_container").hide();
@@ -488,27 +452,27 @@ video {
 
 				$("#frame_decoded").text(obj.framesDecoded);
 				if (obj.framesDecoded > -1) {
-					$("#frame_decoded_container").show();	
+					$("#frame_decoded_container").show();
 				}
 				else {
 					$("#frame_decoded_container").hide();
 				}
 				$("#frame_dropped").text(obj.framesDropped);
 				if (obj.framesDropped > -1) {
-					$("#frame_dropped_container").show();	
+					$("#frame_dropped_container").show();
 				}
 				else {
 					$("#frame_dropped_container").hide();
 				}
 
 				$("#stats_panel").show();
-				
-				
 
-				console.debug("Average incoming kbits/sec: " + obj.averageIncomingBitrate 
+
+
+				console.debug("Average incoming kbits/sec: " + obj.averageIncomingBitrate
 						+ " Current incoming kbits/sec: " + obj.currentIncomingBitrate
-						+ " video packetLost: " + obj.videoPacketsLost 
-						+ " audio packetLost: " + obj.audioPacketsLost 
+						+ " video packetLost: " + obj.videoPacketsLost
+						+ " audio packetLost: " + obj.audioPacketsLost
 						+ " frame width: " + obj.frameWidth
 						+ " frame height: " + obj.frameHeight
 						+ " frame received: " + obj.framesReceived
@@ -517,7 +481,7 @@ video {
 						+ " video jitter average delay: " + obj.videoJitterAverageDelay
 						+ " audio jitter average delay: " + obj.audioJitterAverageDelay
 						+ " audio level: " + obj.audioLevel);
-				 
+
 			}
 			else if (info == "data_received") {
 				var data = obj.data;
@@ -530,7 +494,7 @@ video {
 			}
 			else if (info == "bitrateMeasurement") {
 
-				console.debug(obj);	
+				console.debug(obj);
 				if(obj.audioBitrate+obj.videoBitrate > obj.targetBitrate) {
 					startAnimation();
 				}
@@ -548,11 +512,14 @@ video {
 				console.log( info + " notification received");
 			}
 		},
-		callbackError : function(error) {
+		callbackError : function(error, message) {
 			//some of the possible errors, NotFoundError, SecurityError,PermissionDeniedError
 
-			console.log("error callback: " + JSON.stringify(error));
-			alert(JSON.stringify(error));
+			$('video').notify("Warning: " + errorHandler(error, message), {
+							autoHideDelay:5000,
+							className:'error',
+							position:'bottom center'
+						});
 		}
 	});
 

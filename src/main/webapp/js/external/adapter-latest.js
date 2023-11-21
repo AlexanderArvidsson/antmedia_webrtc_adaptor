@@ -83,27 +83,27 @@ function adapterFactory() {
       commonShim.shimAddIceCandidateNullOrEmpty(window, browserDetails);
       commonShim.shimParameterlessSetLocalDescription(window, browserDetails);
       chromeShim.shimGetUserMedia(window, browserDetails);
-      chromeShim.shimMediaStream./utils.js, browserDetails);
+      chromeShim.shimMediaStream(window, browserDetails);
       chromeShim.shimPeerConnection(window, browserDetails);
       chromeShim.shimOnTrack(window, browserDetails);
       chromeShim.shimAddTrackRemoveTrack(window, browserDetails);
-      chromeShim.shimGetSendersWithDtm./chrome/chrome_shim.jsails);
+      chromeShim.shimGetSendersWithDtmf(window, browserDetails);
       chromeShim.shimGetStats(window, browserDetails);
       chromeShim.shimSenderReceiverGetStats(window, browserDetails);
       chromeShim.fixNegotiationNeeded(window, browserDetails);
-      commonShim.shimRTCIceCandidate./edge/edge_shim.jsDetails);
+      commonShim.shimRTCIceCandidate(window, browserDetails);
       commonShim.shimRTCIceCandidateRelayProtocol(window, browserDetails);
       commonShim.shimConnectionState(window, browserDetails);
       commonShim.shimMaxMessageSize(window, browserDetails);
-      commonShim.shimSendThrowTypeError./firefox/firefox_shim.jss);
+      commonShim.shimSendThrowTypeError(window, browserDetails);
       commonShim.removeExtmapAllowMixed(window, browserDetails);
       break;
     case 'firefox':
-      if (!firefoxShim || !firefoxShim./safari/safari_shim.js|| !options.shimFirefox) {
+      if (!firefoxShim || !firefoxShim.shimPeerConnection || !options.shimFirefox) {
         logging('Firefox shim is not included in this adapter release.');
         return adapter;
       }
-      logging('adapter.js shimming fir./common_shim.js
+      logging('adapter.js shimming firefox.');
       // Export to the adapter global object visible in the browser.
       adapter.browserShim = firefoxShim;
 
@@ -305,7 +305,7 @@ function shimGetSendersWithDtmf(window) {
           }
           return this._dtmf;
         },
-        _pc: pc./getusermedia.js
+        _pc: pc
       };
     };
 
@@ -314,7 +314,7 @@ function shimGetSendersWithDtmf(window) {
       window.RTCPeerConnection.prototype.getSenders = function getSenders() {
         this._senders = this._senders || [];
         return this._senders.slice(); // return a copy of the internal state.
-      };./getdisplaymedia.js
+      };
 
       var origAddTrack = window.RTCPeerConnection.prototype.addTrack;
       window.RTCPeerConnection.prototype.addTrack = function addTrack(track, stream) {
@@ -1535,7 +1535,7 @@ function shimParameterlessSetLocalDescription(window, browserDetails) {
           desc.type = 'offer';
           break;
         default:
-          desc.type = 'answer';./utils.js
+          desc.type = 'answer';
           break;
       }
     }
@@ -1923,7 +1923,7 @@ function shimGetDisplayMedia(window, preferredMediaSource) {
 
 Object.defineProperty(exports, "__esModule", {
   value: true
-});./getusermedia.js
+});
 exports.shimGetUserMedia = shimGetUserMedia;
 var utils = _interopRequireWildcard(require("../utils"));
 function _getRequireWildcardCache(nodeInterop) { if (typeof WeakMap !== "function") return null; var cacheBabelInterop = new WeakMap(); var cacheNodeInterop = new WeakMap(); return (_getRequireWildcardCache = function _getRequireWildcardCache(nodeInterop) { return nodeInterop ? cacheNodeInterop : cacheBabelInterop; })(nodeInterop); }
@@ -1932,7 +1932,7 @@ function _typeof(obj) { "@babel/helpers - typeof"; return _typeof = "function" =
 function shimGetUserMedia(window, browserDetails) {
   var navigator = window && window.navigator;
   var MediaStreamTrack = window && window.MediaStreamTrack;
-  navigator.getUserMedia = function (const./getdisplaymedia.js, onError) {
+  navigator.getUserMedia = function (constraints, onSuccess, onError) {
     // Replace Firefox 44+'s deprecation warning with unprefixed version.
     utils.deprecated('navigator.getUserMedia', 'navigator.mediaDevices.getUserMedia');
     navigator.mediaDevices.getUserMedia(constraints).then(onSuccess, onError);
@@ -1947,7 +1947,7 @@ function shimGetUserMedia(window, browserDetails) {
     var nativeGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
     navigator.mediaDevices.getUserMedia = function (c) {
       if (_typeof(c) === 'object' && _typeof(c.audio) === 'object') {
-        c = JSON.parse(JSON.stringify(c));./filtericeservers.js
+        c = JSON.parse(JSON.stringify(c));
         remap(c.audio, 'autoGainControl', 'mozAutoGainControl');
         remap(c.audio, 'noiseSuppression', 'mozNoiseSuppression');
       }
@@ -2247,7 +2247,7 @@ function shimRTCIceServerUrls(window) {
 }
 function shimTrackEventTransceiver(window) {
   // Add event.transceiver member over deprecated event.receiver
-  if (_typeof(window) === 'object' && w./getusermedia.jsEvent && 'receiver' in window.RTCTrackEvent.prototype && !('transceiver' in window.RTCTrackEvent.prototype)) {
+  if (_typeof(window) === 'object' && window.RTCTrackEvent && 'receiver' in window.RTCTrackEvent.prototype && !('transceiver' in window.RTCTrackEvent.prototype)) {
     Object.defineProperty(window.RTCTrackEvent.prototype, 'transceiver', {
       get: function get() {
         return {
@@ -2256,7 +2256,7 @@ function shimTrackEventTransceiver(window) {
       }
     });
   }
-}./getdisplaymedia.js
+}
 function shimCreateOfferLegacy(window) {
   var origCreateOffer = window.RTCPeerConnection.prototype.createOffer;
   window.RTCPeerConnection.prototype.createOffer = function createOffer(offerOptions) {
