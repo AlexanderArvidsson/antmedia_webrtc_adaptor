@@ -627,13 +627,13 @@ export class WebRTCAdaptor {
      * Called to start a playing session for a stream. AMS responds with start message.
      * Parameters:
      *  @param {string} streamId :(string) unique id for the stream that you want to play
-     *  @param {string} token :(string) required if any stream security (token control) enabled. Check https://github.com/ant-media/Ant-Media-Server/wiki/Stream-Security-Documentation
-     *  @param {string} roomId :(string) required if this stream is belonging to a room participant
-     *  @param {MediaStreamTrack} enableTracks :(array) required if the stream is a main stream of multitrack playing. You can pass the the subtrack id list that you want to play.
+     *  @param {string} [token] :(string) required if any stream security (token control) enabled. Check https://github.com/ant-media/Ant-Media-Server/wiki/Stream-Security-Documentation
+     *  @param {string} [roomId] :(string) required if this stream is belonging to a room participant
+     *  @param {MediaStreamTrack[]} [enableTracks] :(array) required if the stream is a main stream of multitrack playing. You can pass the the subtrack id list that you want to play.
      *                    you can also provide a track id that you don't want to play by adding ! before the id.
-     *  @param {string} subscriberId:(string) required if TOTP enabled. Check https://github.com/ant-media/Ant-Media-Server/wiki/Time-based-One-Time-Password-(TOTP)
-     *  @param {string} subscriberCode:(string) required if TOTP enabled. Check https://github.com/ant-media/Ant-Media-Server/wiki/Time-based-One-Time-Password-(TOTP)
-     *  @param {string} metaData:(string, json) a free text information for the stream to AMS. It is provided to Rest methods by the AMS
+     *  @param {string} [subscriberId] :(string) required if TOTP enabled. Check https://github.com/ant-media/Ant-Media-Server/wiki/Time-based-One-Time-Password-(TOTP)
+     *  @param {string} [subscriberCode] :(string) required if TOTP enabled. Check https://github.com/ant-media/Ant-Media-Server/wiki/Time-based-One-Time-Password-(TOTP)
+     *  @param {string} [metaData] :(string, json) a free text information for the stream to AMS. It is provided to Rest methods by the AMS
      */
     play(streamId, token, roomId, enableTracks, subscriberId, subscriberCode, metaData) {
         this.playStreamId.push(streamId);

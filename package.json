@@ -1,6 +1,6 @@
 {
     "name": "@metamist/ant_webrtc_adaptor",
-    "version": "2.6.2",
+    "version": "2.6.4",
     "description": "WebRTC Adaptor for implementing a front end using Ant Media Server.",
     "main": "dist/index.js",
     "module": "dist/es/index.js",
